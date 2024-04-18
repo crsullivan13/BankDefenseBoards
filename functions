@@ -1,0 +1,73 @@
+#!/bin/bash
+
+BW=workloads/Bw
+BKPLL=workloads/BkPLL
+
+stats=cpu/L1-dcache-loads/,cpu/L1-dcache-load-misses/,cpu/LLC-loads/,cpu/LLC-load-misses/ #beagleV
+
+# Palloc paritions, requires palloc setup
+vpart=part1
+cpart=part2
+
+function BwReadVictimSolo() {
+    echo $$ > /sys/fs/cgroup/palloc/$vpart/cgroup.procs
+
+    output=`chrt -f 1 perf stat -e $stats $BW -c 0 -m $1 -i $2 -t 0 -a read 2>&1`
+    solo=`echo "$output" | grep B/W | awk 'NF{print $(NF-7)}'`
+    l2misses=`echo "$output" | grep -i "llc-load-misses/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2loads=`echo "$output" | grep -i "llc-loads/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2missrate=`bc <<< "scale=2; $l2misses*100/$l2loads"`
+    echo "BwReadSolo($1), $solo, 1.00, $l2loads, $l2misses, $l2missrate"
+}
+
+function BwReadVictimCorun() { 
+    echo $$ > /sys/fs/cgroup/palloc/$vpart/cgroup.procs
+	
+    output=`chrt -f 1 perf stat -e $stats $BW -c 0 -m $1 -i $2 -t 0 -a read 2>&1`
+    slow=`echo "$output" | grep B/W | awk 'NF{print $(NF-7)}'`
+    slowdown=`bc <<< "scale=2; $solo/$slow"`
+    l2misses=`echo "$output" | grep -i "llc-load-misses/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2loads=`echo "$output" | grep -i "llc-loads/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2missrate=`bc <<< "scale=2; $l2misses*100/$l2loads"`
+    echo "BwVictim($1), $slow, $slowdown, $l2loads, $l2misses, $l2missrate"
+}
+
+function BkPLLSolo() {
+    echo $$ > /sys/fs/cgroup/palloc/$vpart/cgroup.procs
+
+    output=`chrt -f 1 perf stat -e $stats $BKPLL -c $1 -m $2 -a $3 -i $4 -e $5 -b 0x40 -l 6 2>&1`
+    solo=`echo "$output" | grep bandwidth | awk 'NF{print $(NF-1)}'`
+    l2misses=`echo "$output" | grep -i "llc-load-misses/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2loads=`echo "$output" | grep -i "llc-loads/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2missrate=`bc <<< "scale=2; $l2misses*100/$l2loads"`  
+    echo "BkPLLSolo($2), $solo, 1.00, $l2loads, $l2misses, $l2missrate"
+}
+
+function BkPLLCorun() {
+    echo $$ > /sys/fs/cgroup/palloc/$vpart/cgroup.procs
+    
+    output=`chrt -f 1 perf stat -e $stats $BKPLL -c $1 -m $2 -a $3 -i $4 -e $5 -b 0x40 -l 6 2>&1`
+    slow=`echo "$output" | grep bandwidth | awk 'NF{print $(NF-1)}'`
+    slowdown=`bc <<< "scale=2; $solo/$slow"`
+    l2misses=`echo "$output" | grep -i "llc-load-misses/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2loads=`echo "$output" | grep -i "llc-loads/" | awk '{ print $1 }' | sed 's/,//g'`
+    l2missrate=`bc <<< "scale=2; $l2misses*100/$l2loads"`
+    echo "BkPLLCorun($2), $slow, $slowdown, $l2loads, $l2misses, $l2missrate"
+}
+
+function BkPLLWriteAttackers() {
+    echo $$ > /sys/fs/cgroup/palloc/$cpart/cgroup.procs
+
+    for ((i=0; i<3; i++)); do
+        $BKPLL -c $i -m $1 -a write -i 99999999 -e $2 -b 0x40 -l 6 &> /dev/null &
+    done
+}
+
+function BkPLLReadAttackers() {
+    echo $$ > /sys/fs/cgroup/palloc/$cpart/cgroup.procs
+
+    for ((i=0; i<3; i++)); do
+        $BKPLL -c $i -m $1 -a read -i 99999999 -e $2 -b 0x40 -l 6 &> /dev/null &
+    done
+}
+
