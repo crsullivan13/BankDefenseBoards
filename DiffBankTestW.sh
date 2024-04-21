@@ -9,26 +9,25 @@ OUT2=outputs/attack/sepbanksW-bw.csv
 OUT3=outputs/attack/sepbanksW-llc.csv
 
 victimSizes=(64 128 192 256 320 512)
-victimIterations=150000
+victimIterations=50000
 victimTypes=read
 victimCore=3
 victimBank=0
 
 attackerSize=128
 
-slowdowns=()
-bw=()
-missrate=()
+declare -a slowdowns
+declare -a bw
+declare -a missrate
 
 windowSize=$1
-samewindow=0
-diffwindow=0
-bwsolo=0
-bwdiff=0
-bwsame=0
-llcsolo=0
-llcdiff=0
-llcsame=0
+
+declare -a bwsolo
+declare -a bwdiff
+declare -a bwsame
+declare -a llcsolo
+declare -a llcdiff
+declare -a llcsame
 
 index=0
 for victimSize in ${victimSizes[@]}; do
@@ -43,17 +42,15 @@ for victimSize in ${victimSizes[@]}; do
     for ((test=1; test<=$windowSize; test++)); do
 	echo "Iteration $test"
    	BkPLLSolo $victimCore $victimSize $victimTypes $victimIterations $victimBank
-	bwsolo=$(echo $bwsolo+$solo | bc)
-	llcsolo=$(echo $llcsolo+$l2missrate | bc)
+	bwsolo[$test]=$solo
+	llcsolo[$test]=$l2missrate
 
     	#Attackers on different bank than victim
     	BkPLLWriteAttackers $attackerSize 1
     	sleep 3
     	BkPLLCorun $victimCore $victimSize $victimTypes $victimIterations $victimBank
-    	#slowdowns[$index]+="$slowdown "
-	diffwindow=$(echo $diffwindow+$slowdown | bc)
-	bwdiff=$(echo $bwdiff+$slow | bc)
-	llcdiff=$(echo $llcdiff+$l2missrate | bc)
+	bwdiff[$test]=$slow
+	llcdiff[$test]=$l2missrate
     	killall $BKPLL
     	wait &> /dev/null
 
@@ -61,48 +58,42 @@ for victimSize in ${victimSizes[@]}; do
     	BkPLLWriteAttackers $attackerSize $victimBank
     	sleep 3
     	BkPLLCorun $victimCore $victimSize $victimTypes $victimIterations $victimBank
-    	#slowdowns[$index]+="$slowdown "
-	samewindow=$(echo $samewindow+$slowdown | bc)
-	bwsame=$(echo $bwsame+$slow | bc)
-	llcsame=$(echo $llcsame+$l2missrate | bc)
+	bwsame[$index]=$slow
+	llcsame[$index]=$l2missrate
     	killall $BKPLL
     	wait &> /dev/null
 
-    	#index=$((index+1))
-    	#echo "$index"
-
-    	sleep 3
+    	#sleep 3
     done
 
-    samewindow=$(echo "scale=2; $samewindow/$windowSize" | bc)
-    diffwindow=$(echo "scale=2; $diffwindow/$windowSize" | bc)
-    slowdowns[$index]+="$diffwindow "
-    slowdowns[$index]+="$samewindow "
 
-    samewindow=0
-    diffwindow=0
+    #get medians
+    solobw=$(echo "${bwsolo[@]}" | xargs -n1  | sort -n | datamash median 1) 
+    samebw=$(echo "${bwsame[@]}" | xargs -n1  | sort -n | datamash median 1) 
+    diffbw=$(echo "${bwdiff[@]}" | xargs -n1  | sort -n | datamash median 1) 
 
-    bwsolo=$(echo "scale=2; $bwsolo/$windowSize" | bc)
-    bwsame=$(echo "scale=2; $bwsame/$windowSize" | bc)
-    bwdiff=$(echo "scale=2; $bwdiff/$windowSize" | bc)
-    bw[$index]+="$bwsolo "
-    bw[$index]+="$bwdiff "
-    bw[$index]+="$bwsame "
-    
-    bwsolo=0
-    bwsame=0
-    bwdiff=0
+    #calc slowdown
+    slowdowns[$index]+="$(bc <<< "scale=2; $solobw/$diffbw") "
+    slowdowns[$index]+="$(bc <<< "scale=2; $solobw/$samebw") "
 
-    llcsolo=$(echo "scale=2; $llcsolo/$windowSize" | bc)
-    llcdiff=$(echo "scale=2; $llcdiff/$windowSize" | bc)
-    llcsame=$(echo "scale=2; $llcsame/$windowSize" | bc)
-    missrate[$index]+="$llcsolo "
-    missrate[$index]+="$llcdiff "
-    missrate[$index]+="$llcsame "
+    unset sameslow
+    unset diffslow
 
-    llcsolo=0
-    llcdiff=0
-    llcsame=0
+    bw[$index]+="$solobw "
+    bw[$index]+="$diffbw "
+    bw[$index]+="$samebw "
+
+    unset bwsolo
+    unset bwsame
+    unset bwdiff    
+
+    missrate[$index]+="$(echo "${llcsolo[@]}" | xargs -n1  | sort -n | datamash median 1) "
+    missrate[$index]+="$(echo "${llcdiff[@]}" | xargs -n1  | sort -n | datamash median 1) "
+    missrate[$index]+="$(echo "${llcsame[@]}" | xargs -n1  | sort -n | datamash median 1) "
+
+    unset llcsolo
+    unset llcdiff
+    unset llcsame
 
     index=$((index+1))
 

@@ -2,13 +2,19 @@
 
 BW=workloads/Bw
 BKPLL=workloads/BkPLL
-bankMask=0x70 #pi 4
-# bankMask=0x80 #beagleV
-llcAcc="l2d_cache/"
-llcMiss="l2d_cache_refill/"
+#bankMask=0x70 #pi 4
+bankMask=0x40 #beagleV
 
-#stats=cpu/L1-dcache-loads/,cpu/L1-dcache-load-misses/,cpu/LLC-loads/,cpu/LLC-load-misses/ #beagleV
-stats=armv8_cortex_a72/l2d_cache_refill/,armv8_cortex_a72/l2d_cache/,L1-dcache-loads,L1-dcache-load-misses #pi4
+#beagleV
+llcAcc="LLC-loads/"
+llcMiss="LLC-load-misses/"
+
+#pi4
+#llcAcc="l2d_cache/"
+#llcMiss="l2d_cache_refill/"
+
+stats=cpu/L1-dcache-loads/,cpu/L1-dcache-load-misses/,cpu/LLC-loads/,cpu/LLC-load-misses/ #beagleV
+#stats=armv8_cortex_a72/l2d_cache_refill/,armv8_cortex_a72/l2d_cache/,L1-dcache-loads,L1-dcache-load-misses #pi4
 
 # Palloc paritions, requires palloc setup
 vpart=part1
